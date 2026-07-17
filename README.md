@@ -155,6 +155,29 @@ src/vault_recall/
    → 진단(diagnose: orphan→연결 제안) → 증빙(eval: R@k·MRR) → 훈련(train: SM-2) → 기록(.recall_cache)
 ```
 
+## 서재 채우기 — 노션 증분 동기화 (`scripts/sync_notion.py`)
+
+볼트를 "일회성 이관"이 아니라 **살아있는 서재**로 유지하는 조각. 노션 Career-Ops에 새로 추가·수정된 항목만 골라 볼트 카드로 반영한다. 예약 자동화는 클라우드라 로컬 볼트에 못 닿으므로 **사용자 PC에서 직접 실행**하는 독립 스크립트다(외부 의존성 0 — 표준 라이브러리 urllib, Notion 공식 API 2025-09-03 data sources).
+
+```bash
+# 1) 노션 통합 토큰 발급(https://www.notion.so/my-integrations) 후 6개 DB를 그 통합과 공유
+# 2) 토큰 지정 (Windows: set NOTION_TOKEN=... / mac·linux: export NOTION_TOKEN=...)
+export NOTION_TOKEN=ntn_xxxxx
+# (최초 1회) 지금 노션에 있는 것 전체를 '이미 반영됨'으로 기준선 설정 — 카드 생성 안 함
+python scripts/sync_notion.py --vault "C:/Users/you/career-vault" --baseline
+# 이후: 새로 추가·수정된 것만 동기화
+python scripts/sync_notion.py --vault "C:/Users/you/career-vault" --dry-run   # 미리보기
+python scripts/sync_notion.py --vault "C:/Users/you/career-vault"             # 실제 반영
+```
+
+> ⚠ **최초 1회 `--baseline` 필수.** 볼트는 이미 노션에서 한 번 이관돼 있으므로, 이걸 건너뛰면 기존 항목이 전부 "새 카드"로 잡혀 중복 생성된다(`--baseline`은 카드를 만들지 않고 현재 항목을 '반영됨'으로만 표시).
+
+동작 원칙(HITL·중복 방지):
+- 새 페이지 → 소속 폴더에 `verified:false` 초안 카드 생성(제목·요약·우선순위·링크·검증상태 자동 매핑).
+- 각 카드에 `notion_id`를 남겨 **재실행해도 중복 생성 안 함**(idempotent). 페이지별 `last_edited_time`을 `.recall_cache/`에 저장해 증분 처리.
+- 수정된 페이지 → 사람이 큐레이션한 원본은 **건드리지 않고** `90_inbox/_updates/`에 `[UPDATED]` 초안만 남겨 병합하게 함(자동 덮어쓰기 금지).
+- 링크(`## 연결`)는 비운 채 생성 → `diagnose`가 orphan으로 잡아 "여기 연결하라"고 안내. 수집은 자동, 편입·검증·연결은 사람.
+
 ## 로드맵
 1. ~~의미 검색 기본화~~ → **완료** / ~~리랭커~~ → **완료**(`--rerank`, 실측 90%/0.800 — 위 표)
 2. ~~훈련 루프~~ → **완료**(SM-2). 다음: FSRS provider·소환 이력 연동(자주 소환된 카드 우선 훈련)
