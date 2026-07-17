@@ -13,22 +13,29 @@ from .parser import Note
 from .search.bm25 import BM25, tokenize, _HANGUL, _ASCII
 from .search import hybrid
 
-GAP_MIN_SCORE = 2.0   # 이 미만이면 '근거 부족' 선언 (BM25 스케일 경험값, 테스트로 고정)
+# 공백 판정: top점수/이상점수 비율 — 스케일 불변 (절제 실험으로 캘리브레이션:
+# in-vault 중앙값 1.23 vs out-vault 중앙값 0.17)
+RATIO_GAP = 0.30    # 미만 → 공백 선언
+RATIO_WEAK = 0.60   # 미만 → 약한 근거 경고
 
 
 @dataclass
 class RecallResult:
     query: str
     hits: list           # [(Note, score, why)]
-    gap: bool            # 전체 근거 부족 여부
+    gap: bool            # 강한 공백 (근거 부족 선언)
     uncovered: list      # 볼트가 커버 못한 질의 어절
     verified_only: bool = False
+    confidence: str = "충분"   # 충분 | 약함 | 공백
+    ratio: float = 0.0         # top점수 / 이상점수
 
     def to_markdown(self) -> str:
         lines = [f"# 소환: {self.query}", ""]
-        if self.gap:
-            lines += ["> ⚠ **근거 부족** — 이 질의에 대한 지식이 볼트에 충분하지 않다.",
+        if self.confidence == "공백":
+            lines += ["> ⚠ **근거 부족(공백)** — 이 질의에 대한 지식이 볼트에 없다.",
                       "> 지어내지 않는다. 아래는 가장 가까운 카드일 뿐이다.", ""]
+        elif self.confidence == "약함":
+            lines += ["> ⚠ **근거 약함** — 인접 주제 카드만 있다. 결론에 쓰기 전 검증할 것.", ""]
         for i, (note, score, why) in enumerate(self.hits, 1):
             v = "✓검증" if note.verified else "⚠미검증"
             lines.append(f"## {i}. [[{note.name}]] ({v} · {note.folder} · {score:.2f})")
@@ -50,7 +57,9 @@ def _query_words(q: str) -> list[str]:
 
 def perform(notes: dict[str, Note], graph, bm25: BM25, query: str, k: int = 5,
             verified_only: bool = False, embed_provider=None) -> RecallResult:
-    ranked = hybrid.search(bm25, graph, query, k=k * 2, embed_provider=embed_provider)
+    type_of = {n.name: n.type for n in notes.values()}
+    ranked = hybrid.search(bm25, graph, query, k=k * 2, embed_provider=embed_provider,
+                           type_of=type_of)
     hits = []
     for name, score, why in ranked:
         note = notes.get(name)
@@ -63,7 +72,9 @@ def perform(notes: dict[str, Note], graph, bm25: BM25, query: str, k: int = 5,
             break
 
     top = hits[0][1] if hits else 0.0
-    gap = top < GAP_MIN_SCORE
+    ratio = top / bm25.ideal_score(query)
+    confidence = "공백" if ratio < RATIO_GAP else ("약함" if ratio < RATIO_WEAK else "충분")
+    gap = confidence == "공백"
 
     # 정직한 공백: 질의 어절 중 어떤 상위 근거에도 등장하지 않는 것
     covered_tokens = set()
@@ -72,4 +83,5 @@ def perform(notes: dict[str, Note], graph, bm25: BM25, query: str, k: int = 5,
     uncovered = [w for w in _query_words(query)
                  if not (set(tokenize(w)) & covered_tokens)]
     return RecallResult(query=query, hits=hits, gap=gap,
-                        uncovered=uncovered, verified_only=verified_only)
+                        uncovered=uncovered, verified_only=verified_only,
+                        confidence=confidence, ratio=ratio)

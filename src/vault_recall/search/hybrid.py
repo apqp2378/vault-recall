@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from .bm25 import BM25
 
-GRAPH_DAMP = 0.30   # 이웃으로 전파되는 점수 비율
+GRAPH_DAMP = 0.30    # 이웃으로 전파되는 점수 비율 (절제 실험: 랭킹 효과 0 — 근거 확장용)
+MOC_PENALTY = 0.5    # 허브(MOC)가 개별 근거를 밀어내지 않도록 (절제 실험: MRR +0.017)
 RRF_K = 60
 
 
@@ -19,8 +20,9 @@ def rrf(rankings: list[list[str]]) -> dict[str, float]:
     return fused
 
 
-def search(bm25: BM25, graph, query: str, k: int = 5, embed_provider=None):
-    """→ [(name, score, why:list[str])]"""
+def search(bm25: BM25, graph, query: str, k: int = 5, embed_provider=None,
+           type_of: dict | None = None):
+    """→ [(name, score, why:list[str])]. type_of가 있으면 MOC 패널티 적용."""
     seeds = bm25.query(query, k=k * 3)
     scores = {name: s for name, s, _ in seeds}
     why = {name: [f"직접 매칭: {', '.join(m)}"] for name, _, m in seeds}
@@ -44,5 +46,8 @@ def search(bm25: BM25, graph, query: str, k: int = 5, embed_provider=None):
         scores = {n: fused.get(n, 0.0) + 0.001 * scores.get(n, 0.0)
                   for n in set(fused) | set(scores)}
 
+    if type_of:
+        scores = {n: (s * MOC_PENALTY if type_of.get(n) == "moc" else s)
+                  for n, s in scores.items()}
     ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))[:k]
     return [(n, s, why.get(n, [])) for n, s in ranked]

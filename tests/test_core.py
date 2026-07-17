@@ -92,3 +92,51 @@ def test_ingest_creates_inbox_cards(tmp_path):
     assert len(created) == 2
     card = (tmp_path / "90_inbox" / created[0]).read_text(encoding="utf-8")
     assert "verified: false" in card and "type: tool" in card
+
+
+def test_ideal_score_positive():
+    _, _, bm25 = load()
+    assert bm25.ideal_score("퍼널 병목") > 0
+
+
+def test_confidence_levels():
+    notes, graph, bm25 = load()
+    known = recall.perform(notes, graph, bm25, "퍼널 분석 병목")
+    unknown = recall.perform(notes, graph, bm25, "양자컴퓨터 오류정정 큐비트")
+    assert known.confidence == "충분" and known.ratio > unknown.ratio
+    assert unknown.confidence == "공백" and unknown.gap
+
+
+def test_moc_penalty_demotes_hub():
+    notes, graph, bm25 = load()
+    type_of = {n.name: n.type for n in notes.values()}
+    plain = [n for n, _, _ in hybrid.search(bm25, graph, "분석 기법", k=3)]
+    penal = [n for n, _, _ in hybrid.search(bm25, graph, "분석 기법", k=3, type_of=type_of)]
+    def moc_rank(names):
+        return next((i for i, n in enumerate(names) if n.startswith("MOC_")), 99)
+    assert moc_rank(penal) >= moc_rank(plain)  # 패널티가 MOC 순위를 올리지는 않는다
+
+
+def test_eval_empty_relevant_expects_nonconfident(tmp_path):
+    import json as _json
+    notes, graph, bm25 = load()
+    gold_file = tmp_path / "g.json"
+    gold_file.write_text(_json.dumps(
+        [{"query": "양자컴퓨터 오류정정 큐비트", "relevant": []}], ensure_ascii=False),
+        encoding="utf-8")
+    gold = evalkit.load_gold(gold_file, list(notes))
+    res = evalkit.evaluate(bm25, graph, gold, k=5,
+                           type_of={n.name: n.type for n in notes.values()})
+    assert res["recall_at_k"] == 1.0  # 볼트에 없는 주제 → 비확신 처리 = 성공
+
+
+def test_embed_prefix_and_digest():
+    from vault_recall.search.embed import needs_e5_prefix, corpus_digest, get_provider
+    assert needs_e5_prefix("intfloat/multilingual-e5-small")
+    assert not needs_e5_prefix("BAAI/bge-m3")
+    c1 = {"a": "본문", "b": "다른 본문"}
+    assert corpus_digest("m", c1) == corpus_digest("m", dict(reversed(list(c1.items()))))
+    assert corpus_digest("m", c1) != corpus_digest("m2", c1)
+    assert get_provider(enabled=False) is None
+    # 모델을 못 받는 환경에서도 죽지 않고 None 폴백
+    assert get_provider(True, "존재하지-않는/모델", quiet=True) is None

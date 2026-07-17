@@ -41,10 +41,15 @@ def main(argv=None):
             sp.add_argument("query")
             sp.add_argument("-k", type=int, default=5)
             sp.add_argument("--verified-only", action="store_true")
-            sp.add_argument("--embed", action="store_true")
+            sp.add_argument("--no-embed", action="store_true",
+                            help="의미 검색 끄기 (기본: 가능하면 자동 활성)")
+            sp.add_argument("--model", default=None, help="임베딩 모델명 재정의")
         if name == "eval":
             sp.add_argument("--gold", required=True)
             sp.add_argument("-k", type=int, default=5)
+            sp.add_argument("--embed", action="store_true",
+                            help="의미 검색 융합 포함 벤치마크")
+            sp.add_argument("--model", default=None)
         if name == "report":
             sp.add_argument("-o", "--out", default="graph.html")
         if name == "ingest":
@@ -72,7 +77,10 @@ def main(argv=None):
             print("  BROKEN:", b[0], "->", b[1])
         print("외부화: outputs/nodes.csv · outputs/edges.csv")
     elif a.cmd == "recall":
-        provider = get_provider(a.embed)
+        from .search.embed import DEFAULT_MODEL
+        provider = get_provider(enabled=not a.no_embed,
+                                model_name=a.model or DEFAULT_MODEL,
+                                cache_dir=Path(a.vault) / ".recall_cache")
         if provider is not None:
             provider.fit({n.name: n.search_text() for n in notes.values()})
         res = recall.perform(notes, graph, bm25, a.query, k=a.k,
@@ -82,7 +90,16 @@ def main(argv=None):
         print(diag_mod.run(notes, graph, bm25))
     elif a.cmd == "eval":
         gold = evalkit.load_gold(a.gold, list(notes))
-        res = evalkit.evaluate(bm25, graph, gold, k=a.k)
+        type_of = {n.name: n.type for n in notes.values()}
+        provider = None
+        if a.embed:
+            from .search.embed import DEFAULT_MODEL
+            provider = get_provider(True, a.model or DEFAULT_MODEL,
+                                    cache_dir=Path(a.vault) / ".recall_cache")
+            if provider is not None:
+                provider.fit({n.name: n.search_text() for n in notes.values()})
+        res = evalkit.evaluate(bm25, graph, gold, k=a.k, type_of=type_of,
+                               embed_provider=provider)
         print(evalkit.to_markdown(res))
     elif a.cmd == "report":
         path = report.build(notes, graph, a.out)

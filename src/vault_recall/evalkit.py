@@ -12,7 +12,7 @@ from pathlib import Path
 from .search import hybrid
 from .search.bm25 import BM25
 
-GAP_MIN_SCORE = 2.0   # recall.GAP_MIN_SCORE와 동일 (순환 import 회피용 상수)
+RATIO_WEAK = 0.60   # recall.RATIO_WEAK와 동일 — '확신 있는 오답'만 실패로 본다
 
 
 def load_gold(path: str | Path, note_names) -> list[dict]:
@@ -30,20 +30,24 @@ def load_gold(path: str | Path, note_names) -> list[dict]:
     return resolved
 
 
-def evaluate(bm25: BM25, graph, gold: list[dict], k: int = 5) -> dict:
+def evaluate(bm25: BM25, graph, gold: list[dict], k: int = 5,
+             type_of: dict | None = None, embed_provider=None) -> dict:
     rows, hit_at_k, rr_sum = [], 0, 0.0
     for item in gold:
-        results = hybrid.search(bm25, graph, item["query"], k=k)
+        results = hybrid.search(bm25, graph, item["query"], k=k, type_of=type_of,
+                                embed_provider=embed_provider)
         ranked = [n for n, _, _ in results]
         rel = set(item["relevant"])
         if not rel:
-            # 정답이 볼트에 없는 질의 — '정직한 공백' 선언이 나오면 성공
+            # 정답이 볼트에 없는 질의 — 확신 있는 답변만 실패(공백/약함 경고면 성공)
             top = results[0][1] if results else 0.0
-            ok = top < GAP_MIN_SCORE
+            ratio = top / bm25.ideal_score(item["query"])
+            ok = ratio < RATIO_WEAK
             hit_at_k += 1 if ok else 0
             rr_sum += 1.0 if ok else 0.0
-            rows.append({"query": item["query"], "hit": ok, "rank": "공백✔" if ok else "공백✘",
-                         "got": ranked, "want": ["(볼트에 없음 — 공백 선언 기대)"]})
+            label = "공백✔" if ok else "확신오답✘"
+            rows.append({"query": item["query"], "hit": ok, "rank": label,
+                         "got": ranked, "want": ["(볼트에 없음 — 비확신 기대)"]})
             continue
         found = [n for n in ranked if n in rel]
         rank = next((i + 1 for i, n in enumerate(ranked) if n in rel), None)

@@ -1,13 +1,13 @@
 [
  {
-  "query": "A/B 테스트 결과가 통계적으로 유의한지 어떻게 판단하나",
+  "query": "A/B 테스트 결과가 통계적으로 유의한지 판단",
   "relevant": [
    "광고 CVR 차이 통계검증",
    "답변_유의성과 운영적 의미"
   ]
  },
  {
-  "query": "결제 이탈률이 너무 높게 나왔는데 진짜인지 검증하려면",
+  "query": "결제 이탈률이 높게 나왔는데 진짜인지 검증",
   "relevant": [
    "결제창 이탈률 BQ 유저단위",
    "답변_충격 지표의 재검증"
@@ -28,55 +28,131 @@
   ]
  },
  {
-  "query": "모델링 전에 데이터 누수를 막으려면",
+  "query": "모델링 전에 데이터 누수 막기",
   "relevant": [
    "226만건 데이터 누수",
    "답변_데이터 누수 방지"
   ]
  },
  {
-  "query": "BigQuery 비용을 아끼면서 파이프라인 만들기",
+  "query": "BigQuery 비용 아끼면서 파이프라인 구축",
   "relevant": [
    "풀리 6일차",
    "답변_파이프라인 구축"
   ]
  },
  {
-  "query": "지식을 AI가 읽을 수 있게 구조화하는 방법",
+  "query": "지식을 AI가 읽게 구조화",
   "relevant": [
    "에이전트를 위한 지식 베이스",
    "옵시디언과 클로드 총정리"
   ]
  },
  {
-  "query": "이력서 문장을 PAR 구조로 쓰는 법",
+  "query": "이력서 PAR 구조 작성법",
   "relevant": [
    "5개 기업 동시 합격"
   ]
  },
  {
-  "query": "인과추론에 쓸 파이썬 도구",
+  "query": "인과추론 파이썬 도구",
   "relevant": [
    "dowhy",
    "EconML",
-   "CausalPy"
+   "CausalPy",
+   "causalml"
   ]
  },
  {
-  "query": "스크롤 계측이 이상하게 찍힐 때 디버깅",
+  "query": "스크롤 계측 버그 디버깅",
   "relevant": [
    "스크롤 트래커 중대버그",
    "답변_계측 버그 규명"
   ]
  },
  {
-  "query": "면접에서 모르는 질문이 나오면 어떻게 대처",
+  "query": "면접에서 모르는 질문 대처",
   "relevant": [
    "비전공자 가상 면접"
   ]
  },
  {
-  "query": "간격반복으로 복습 주기를 정하는 알고리즘",
+  "query": "퍼널 분해로 전환율 병목 찾기",
+  "relevant": [
+   "퍼널 분해로 CVR",
+   "답변_퍼널 분해와 운영 판단"
+  ]
+ },
+ {
+  "query": "비모수 검정 언제 쓰나",
+  "relevant": [
+   "광고 CVR 차이 통계검증",
+   "답변_유의성과 운영적 의미"
+  ]
+ },
+ {
+  "query": "시계열 수요 예측 도구",
+  "relevant": [
+   "prophet",
+   "statsforecast"
+  ]
+ },
+ {
+  "query": "셀프서비스 BI 도구 추천",
+  "relevant": [
+   "metabase",
+   "superset"
+  ]
+ },
+ {
+  "query": "업리프트 모델링으로 타겟팅",
+  "relevant": [
+   "causalml"
+  ]
+ },
+ {
+  "query": "데이터 품질을 테스트로 검증",
+  "relevant": [
+   "great_expectations"
+  ]
+ },
+ {
+  "query": "웨어하우스에서 A/B 실험 플랫폼",
+  "relevant": [
+   "growthbook"
+  ]
+ },
+ {
+  "query": "취업 준비를 파이프라인으로 자동화",
+  "relevant": [
+   "취업 준비를 DA 파이프라인",
+   "self-da 흡수"
+  ]
+ },
+ {
+  "query": "마케팅 예산 미디어믹스 모델링",
+  "relevant": [
+   "pymc-marketing"
+  ]
+ },
+ {
+  "query": "쿠버네티스 파드 오토스케일링",
+  "relevant": []
+ },
+ {
+  "query": "부동산 청약 가점 계산",
+  "relevant": []
+ },
+ {
+  "query": "환율 헤지 전략",
+  "relevant": []
+ },
+ {
+  "query": "우울증 인지행동치료",
+  "relevant": []
+ },
+ {
+  "query": "간격반복 복습 알고리즘",
   "relevant": []
  }
 ]

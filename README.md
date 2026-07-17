@@ -53,21 +53,47 @@ $ vault-recall recall <vault> "결제 이탈률이 높게 나왔는데 진짜인
 볼트가 커버하지 못한 질의 어절 — 다음 학습/기록 후보: ...
 ```
 
-- **하이브리드 랭킹** = BM25(한국어 음절 bigram 토크나이저) + **그래프 부스트**(상위 근거의 위키링크 이웃을 감쇠 점수로 확장) + 선택적 임베딩 RRF 융합.
-- **정직한 공백** = 근거 점수가 임계 미만이면 "근거 부족"을 선언하고, 커버되지 않은 질의 어절을 그대로 보여준다. 할루시네이션을 모델이 아니라 **구조**로 차단한다.
+- **하이브리드 랭킹** = BM25(한국어 음절 bigram) + **그래프 부스트**(위키링크 이웃 확장) + MOC 패널티 + 의미 검색 RRF 융합(가능 시 자동).
+- **3단계 신뢰도** = top점수/이상점수 비율로 충분·약함·공백을 구분(스케일 불변). "근거 약함"이면 경고를, "공백"이면 근거 부족 선언을 낸다 — 할루시네이션을 모델이 아니라 **구조**로 차단.
 - **HITL 필터** = `--verified-only`로 사람이 검증(`verified: true`)한 지식만 소환.
+
+## 의미 검색 (임베딩) — 자동 활성
+
+`recall`은 임베딩 레이어를 **가능하면 자동으로** 켠다(불가 환경에선 코어만으로 동작, 죽지 않음):
+
+```bash
+pip install 'vault-recall[embed]'    # sentence-transformers
+vault-recall recall <vault> "떠난 고객이 다시 돌아오는 비율"   # 자동 융합
+vault-recall eval <vault> --gold eval/gold_paraphrase.json --embed   # 효과 측정
+```
+
+- 기본 모델 `intfloat/multilingual-e5-small`(한국어 지원·경량) — `--model`/`VAULT_RECALL_EMBED_MODEL`로 교체(BGE-M3 등). e5 계열의 query:/passage: 프리픽스 자동 처리.
+- 임베딩은 `<vault>/.recall_cache/`에 디스크 캐시 — 2회차부터 인코딩 없이 즉시.
+- **왜 필요한가(측정된 갭):** 어휘가 겹치지 않는 패러프레이즈 질의 10건에서 코어는 R@5 60%에 머문다(정확 어휘 질의는 100%). `eval/gold_paraphrase.json`으로 융합 전후를 직접 비교하라.
 
 ## 실측 (저자의 실제 지식볼트, 188 노트 · 548 엣지)
 
 | 지표 | 값 |
 |---|---|
-| 골드셋 12건 Recall@5 | **91.7%** |
-| MRR | **0.808** (12건 중 8건이 1위 적중) |
-| 데모 볼트 골드셋 5건 | Recall@5 100% · MRR 1.000 |
+| 골드셋 25건 Recall@5 | **100%** — 정답 있는 20건 전부 top-5 적중 |
+| MRR | **0.873** (20건 중 14건이 1위 적중) |
+| 정답이 볼트에 없는 5건 | **5/5 비확신 처리** (강한 공백 3 · 약함 경고 2) — 확신 있는 오답 0 |
+| 패러프레이즈 10건(어휘 겹침 없음) | R@5 60% — **임베딩 레이어가 닫아야 할 갭** (아래) |
 | orphan(소환 불가 노트) | 0% (진단→연결 보강 후) |
-| 테스트 | 11 passed (파서·BM25·그래프 부스트·공백 선언·평가·수집) |
+| 테스트 | 16 passed |
 
-실패 1건도 기록해 둔다: "간격반복 알고리즘" 질의는 볼트에 정답이 없어 **공백 선언이 기대**였으나, '복습'을 다루는 인접 노트가 임계(2.0)를 넘겨 근거로 제시됐다. 공백 임계는 휴리스틱이며 near-miss 주제에서 경계가 흐려진다 — 알려진 한계로 명시한다.
+### 기능별 효과크기 (절제 실험, 골드셋 20건)
+
+| 변형 | R@5 | MRR | 효과 |
+|---|---|---|---|
+| BM25 단어 토큰만 | 90.0% | 0.733 | 기준선 |
+| + 한글 음절 bigram | 100% | 0.825 | **+10%p / +0.092 — 최대 효과** |
+| + 그래프 부스트 | 100% | 0.825 | 랭킹 효과 0 — **근거 확장용으로만 유지** (소환 결과에 이웃 카드 제공) |
+| + MOC 패널티 0.5 | 100% | **0.842** | +0.017 — 허브가 개별 근거를 밀어내는 문제 교정 |
+
+공백 판정도 실측으로 캘리브레이션했다: 절대 점수 임계는 분리 실패(볼트 내 최저 17.7 vs 볼트 밖 최고 17.4)
+→ **top점수/이상점수 비율**(스케일 불변)로 교체. in-vault 중앙값 1.23 vs out-vault 중앙값 0.17,
+3단계 신뢰도(충분 ≥0.6 / 약함 ≥0.3 / 공백 <0.3)로 "확신 있는 오답"을 구조적으로 없앴다.
 
 ## 아키텍처
 
@@ -96,13 +122,13 @@ src/vault_recall/
 | [ragas](https://github.com/explodinggradients/ragas) | RAG 품질의 정량 평가 | `evalkit.py` (결정적 축소판) |
 | [reor](https://github.com/reorproject/reor) | KG+개인 RAG+휴먼 판정 | 그래프 부스트 + verified 필터 |
 | [instructor](https://github.com/567-labs/instructor) | 출력 스키마 강제 | `parser.lint()` 카드 스키마 검증 |
-| [FlagEmbedding(BGE-M3)](https://github.com/FlagOpen/FlagEmbedding) | 한국어 강한 임베딩·리랭크 | `embed.py` provider (선택) |
+| [FlagEmbedding(BGE-M3)](https://github.com/FlagOpen/FlagEmbedding) | 한국어 강한 임베딩·리랭크 | `embed.py` provider (auto·캐시·프리픽스) |
 | [react-force-graph](https://github.com/vasturiano/react-force-graph) | 인터랙티브 지식지도 | `report.py` HTML 리포트 |
 | [pgvector](https://github.com/pgvector/pgvector) | DB 내 벡터 검색 | 로드맵(볼트가 커지면 저장층 교체) |
 | [ts-fsrs](https://github.com/open-spaced-repetition/ts-fsrs) | 간격반복 훈련 | 로드맵(소환 다음 단계 = 훈련) |
 
 ## 로드맵
-1. `recall --embed` 기본화(BGE-M3) + 리랭커 — 의미 검색 정밀도
+1. ~~의미 검색 기본화~~ → **완료** (auto 활성·캐시·e5/BGE 지원). 다음: 리랭커(BGE reranker)
 2. 훈련 루프: 소환 이력 기반 간격반복(FSRS) — "소환되게 저장"에서 "기억되게 훈련"으로
 3. 저장층: 볼트 1만 노트 규모에서 pgvector 캐시
 
