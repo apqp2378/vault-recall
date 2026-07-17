@@ -58,18 +58,20 @@ class STProvider:
             self.cache_dir.mkdir(parents=True, exist_ok=True)
             cache = self.cache_dir / f"emb_{corpus_digest(self.model_name, corpus)}.npz"
             if cache.exists():
-                data = np.load(cache, allow_pickle=False)
-                cached_names = json.loads(bytes(data["names"]).decode("utf-8"))
-                if cached_names == self.names:
-                    self.vecs = data["vecs"]
-                    return self
+                try:
+                    data = np.load(cache, allow_pickle=False)
+                    cached_names = json.loads(str(data["names"]))
+                    if cached_names == self.names:
+                        self.vecs = data["vecs"]
+                        return self
+                except Exception:
+                    pass  # 구버전/손상 캐시 → 무시하고 재인코딩
         self.vecs = self.model.encode(
             [self._doc(corpus[n][:1500]) for n in self.names],
             normalize_embeddings=True, batch_size=32, show_progress_bar=False)
         if cache:
             np.savez_compressed(cache, vecs=self.vecs,
-                                names=list(json.dumps(self.names, ensure_ascii=False)
-                                           .encode("utf-8")))
+                                names=np.array(json.dumps(self.names, ensure_ascii=False)))
         return self
 
     def query(self, q: str, k: int = 10):

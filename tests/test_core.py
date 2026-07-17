@@ -202,3 +202,42 @@ def test_lint_invalid_values(tmp_path):
     issues = lint_fn(lv(tmp_path))
     kinds = {(k) for _, k, *_ in issues["invalid_values"]}
     assert {"type", "verified", "priority"} <= kinds
+
+
+def test_weighted_rrf_surfaces_embedding_only_target():
+    """임베딩이 정답을 1위로 볼 때, BM25가 놓친 정답이 융합 top-k에 진입해야 한다.
+    (가중 RRF 회귀 — 동일 가중이면 어휘 노이즈에 묻힘)"""
+    notes, graph, bm25 = load()
+    type_of = {n.name: n.type for n in notes.values()}
+    target = "코호트 리텐션 분석"
+    q = "가입 코호트 리텐션"
+    core_all = {n for n, _, _ in hybrid.search(bm25, graph, q, k=99)}
+    unrelated = [n for n in notes if n not in core_all and n != target][:5]
+
+    class FakeEmb:
+        def query(self, query, k=10):
+            r = [target] + unrelated
+            return [(n, 1.0 - i * 0.05, ["의미"]) for i, n in enumerate(r)]
+
+    fused = [n for n, _, _ in hybrid.search(bm25, graph, q, k=5,
+                                            type_of=type_of, embed_provider=FakeEmb())]
+    assert target in fused
+
+
+def test_rrf_weights_change_scores():
+    from vault_recall.search.hybrid import rrf
+    equal = rrf([["a", "b"], ["b", "a"]])
+    weighted = rrf([["a", "b"], ["b", "a"]], weights=[1.0, 3.0])
+    assert weighted["b"] > weighted["a"]     # 2번째 순위(b 우위)에 가중
+    assert abs(equal["a"] - equal["b"]) < 1e-9
+
+
+def test_embed_cache_roundtrip_korean(tmp_path):
+    """한글 노트명 캐시 저장/로드 (UnicodeDecodeError 회귀)."""
+    import numpy as np, json as _json
+    names = ["한글 노트", "answer_카드", "MOC_분석·실험"]
+    cache = tmp_path / "emb_test.npz"
+    np.savez_compressed(cache, vecs=np.zeros((3, 4)),
+                        names=np.array(_json.dumps(names, ensure_ascii=False)))
+    data = np.load(cache, allow_pickle=False)
+    assert _json.loads(str(data["names"])) == names
