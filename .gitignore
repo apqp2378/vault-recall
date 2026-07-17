@@ -5,3 +5,7 @@ outputs/
 graph.html
 dist/
 *.egg-info/
+
+.venv/
+.recall_cache/
+*.npz
