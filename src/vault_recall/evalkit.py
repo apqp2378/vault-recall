@@ -31,11 +31,13 @@ def load_gold(path: str | Path, note_names) -> list[dict]:
 
 
 def evaluate(bm25: BM25, graph, gold: list[dict], k: int = 5,
-             type_of: dict | None = None, embed_provider=None) -> dict:
+             type_of: dict | None = None, embed_provider=None,
+             reranker=None, texts: dict | None = None) -> dict:
     rows, hit_at_k, rr_sum = [], 0, 0.0
     for item in gold:
         results = hybrid.search(bm25, graph, item["query"], k=k, type_of=type_of,
-                                embed_provider=embed_provider)
+                                embed_provider=embed_provider,
+                                reranker=reranker, texts=texts)
         ranked = [n for n, _, _ in results]
         rel = set(item["relevant"])
         if not rel:
@@ -59,8 +61,10 @@ def evaluate(bm25: BM25, graph, gold: list[dict], k: int = 5,
     return {"recall_at_k": hit_at_k / n, "mrr": rr_sum / n, "k": k, "n": n, "rows": rows}
 
 
-def to_markdown(res: dict) -> str:
-    L = [f"# 검색 품질 평가 (골드셋 {res['n']}건, k={res['k']})", "",
+def to_markdown(res: dict, layers: str = "") -> str:
+    head = f"# 검색 품질 평가 (골드셋 {res['n']}건, k={res['k']}"
+    head += f", {layers})" if layers else ")"
+    L = [head, "",
          f"- **Recall@{res['k']} = {res['recall_at_k']:.1%}** · **MRR = {res['mrr']:.3f}**", "",
          "| 질의 | 적중 | 정답 순위 |", "|---|---|---|"]
     for r in res["rows"]:

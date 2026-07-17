@@ -54,6 +54,8 @@ def main(argv=None):
             sp.add_argument("-k", type=int, default=5)
             sp.add_argument("--embed", action="store_true",
                             help="의미 검색 융합 포함 벤치마크")
+            sp.add_argument("--rerank", action="store_true",
+                            help="cross-encoder 리랭커 포함 벤치마크")
             sp.add_argument("--model", default=None)
         if name == "report":
             sp.add_argument("-o", "--out", default="graph.html")
@@ -123,9 +125,17 @@ def main(argv=None):
                                     cache_dir=Path(a.vault) / ".recall_cache")
             if provider is not None:
                 provider.fit({n.name: n.search_text() for n in notes.values()})
+        reranker = None
+        if a.rerank:
+            from .search.embed import get_reranker
+            reranker = get_reranker(True)
+        texts = {n.name: n.search_text() for n in notes.values()} if reranker else None
         res = evalkit.evaluate(bm25, graph, gold, k=a.k, type_of=type_of,
-                               embed_provider=provider)
-        print(evalkit.to_markdown(res))
+                               embed_provider=provider, reranker=reranker, texts=texts)
+        active = "코어(BM25+그래프)"
+        if provider is not None: active += "+임베딩"
+        if reranker is not None: active += "+리랭커"
+        print(evalkit.to_markdown(res, layers=active))
     elif a.cmd == "report":
         highlight = set()
         if a.query:

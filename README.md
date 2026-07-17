@@ -66,9 +66,15 @@ $ vault-recall recall <vault> "결제 이탈률이 높게 나왔는데 진짜인
 `recall`은 임베딩 레이어를 **가능하면 자동으로** 켠다(불가 환경에선 코어만으로 동작, 죽지 않음):
 
 ```bash
-pip install 'vault-recall[embed]'    # sentence-transformers
-vault-recall recall <vault> "떠난 고객이 다시 돌아오는 비율"   # 자동 융합
-vault-recall eval <vault> --gold eval/gold_paraphrase.json --embed   # 효과 측정
+pip install 'vault-recall[embed]'    # sentence-transformers (리랭커도 이 패키지)
+
+vault-recall recall <vault> "떠난 고객이 다시 돌아오는 비율"            # 임베딩 자동 융합
+vault-recall recall <vault> "..." --rerank                          # + cross-encoder 재채점
+
+# 효과 측정 (3단 비교 — 헤더에 활성 레이어 표시)
+vault-recall eval <vault> --gold eval/gold_paraphrase.json           # 코어
+vault-recall eval <vault> --gold eval/gold_paraphrase.json --embed   # +임베딩
+vault-recall eval <vault> --gold eval/gold_paraphrase.json --embed --rerank  # +리랭커
 ```
 
 - 기본 모델 `intfloat/multilingual-e5-small`(한국어 지원·경량) — `--model`/`VAULT_RECALL_EMBED_MODEL`로 교체(BGE-M3 등). e5 계열의 query:/passage: 프리픽스 자동 처리.
