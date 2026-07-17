@@ -21,8 +21,8 @@ def rrf(rankings: list[list[str]]) -> dict[str, float]:
 
 
 def search(bm25: BM25, graph, query: str, k: int = 5, embed_provider=None,
-           type_of: dict | None = None):
-    """→ [(name, score, why:list[str])]. type_of가 있으면 MOC 패널티 적용."""
+           type_of: dict | None = None, reranker=None, texts: dict | None = None):
+    """→ [(name, score, why:list[str])]. type_of=MOC 패널티, reranker+texts=재채점."""
     seeds = bm25.query(query, k=k * 3)
     scores = {name: s for name, s, _ in seeds}
     why = {name: [f"직접 매칭: {', '.join(m)}"] for name, _, m in seeds}
@@ -49,5 +49,11 @@ def search(bm25: BM25, graph, query: str, k: int = 5, embed_provider=None,
     if type_of:
         scores = {n: (s * MOC_PENALTY if type_of.get(n) == "moc" else s)
                   for n, s in scores.items()}
-    ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))[:k]
-    return [(n, s, why.get(n, [])) for n, s in ranked]
+    ranked = sorted(scores.items(), key=lambda x: (-x[1], x[0]))
+    if reranker is not None and texts:
+        cands = [(n, texts.get(n, "")) for n, _ in ranked[:k * 4]]
+        rer = reranker.rerank(query, cands, k=k)
+        for n, _ in rer:
+            why.setdefault(n, []).append("리랭커 재채점")
+        return [(n, s, why.get(n, [])) for n, s in rer]
+    return [(n, s, why.get(n, [])) for n, s in ranked[:k]]

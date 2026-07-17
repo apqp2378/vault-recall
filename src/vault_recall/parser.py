@@ -86,9 +86,13 @@ def load_vault(root: str | Path) -> dict[str, Note]:
     return notes
 
 
+KNOWN_TYPES = {"principle", "experience", "learning", "trend", "tool",
+               "job", "log", "answer", "moc"}
+
+
 def lint(notes: dict[str, Note]) -> dict:
-    """스키마·링크 위생 점검 (instructor의 '스키마 강제' 개념의 결정적 구현)."""
-    broken, missing_meta = [], []
+    """스키마·링크 위생 점검 — 키 존재 + 값 검증 (instructor의 '스키마 강제' 결정적 구현)."""
+    broken, missing_meta, invalid = [], [], []
     for n in notes.values():
         for l in n.outlinks:
             if l and l not in notes:
@@ -98,4 +102,12 @@ def lint(notes: dict[str, Note]) -> dict:
         for key in ("type", "verified", "description"):
             if key not in n.meta:
                 missing_meta.append((n.name, key))
-    return {"broken_links": broken, "missing_meta": missing_meta}
+        if "type" in n.meta and n.meta["type"] not in KNOWN_TYPES:
+            invalid.append((n.name, "type", str(n.meta["type"])))
+        if str(n.meta.get("verified", "false")).lower() not in ("true", "false"):
+            invalid.append((n.name, "verified", str(n.meta.get("verified"))))
+        pri = str(n.meta.get("priority", ""))
+        if pri and (set(pri) != {"★"} or not 1 <= len(pri) <= 5):
+            invalid.append((n.name, "priority", pri))
+    return {"broken_links": broken, "missing_meta": missing_meta,
+            "invalid_values": invalid}

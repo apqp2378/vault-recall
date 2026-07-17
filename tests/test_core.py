@@ -140,3 +140,65 @@ def test_embed_prefix_and_digest():
     assert get_provider(enabled=False) is None
     # 모델을 못 받는 환경에서도 죽지 않고 None 폴백
     assert get_provider(True, "존재하지-않는/모델", quiet=True) is None
+
+
+def test_sm2_sequence_and_due():
+    from datetime import date
+    from vault_recall import srs
+    e = srs.sm2_update({}, 5, date(2026, 1, 1))
+    assert e["interval"] == 1 and e["due"] == "2026-01-02"
+    e = srs.sm2_update(e, 5, date(2026, 1, 2))
+    assert e["interval"] == 6
+    e2 = srs.sm2_update(e, 2, date(2026, 1, 8))   # 실패 → 리셋
+    assert e2["interval"] == 1 and e2["reps"] == 0
+    assert e2["ef"] >= 1.3
+
+
+def test_train_due_prioritizes_answer_cards():
+    from datetime import date
+    from vault_recall import srs
+    notes, _, _ = load()
+    picks = srs.due_cards(notes, {}, date(2026, 1, 1), n=3)
+    assert picks and picks[0][0] in ("답변_퍼널 병목", "퍼널 개선 경험")
+
+
+def test_ingest_files_md_and_missing_docling(tmp_path):
+    src = tmp_path / "docs"; src.mkdir()
+    (src / "메모.md").write_text("# 첫 줄 요약\n본문입니다", encoding="utf-8")
+    (src / "슬라이드.pptx").write_bytes(b"fake")
+    created, skipped = ingest.run_files(src, tmp_path)
+    assert created == ["메모.md"]
+    card = (tmp_path / "90_inbox" / "메모.md").read_text(encoding="utf-8")
+    assert "verified: false" in card and "본문입니다" in card
+    assert any("docling" in s for s in skipped)
+
+
+def test_reranker_pipeline_with_fake():
+    notes, graph, bm25 = load()
+    class FakeReranker:
+        def rerank(self, q, cands, k=5):
+            return [(n, 1.0) for n, _ in reversed(cands)][:k]  # 순서 뒤집기
+    texts = {n.name: n.search_text() for n in notes.values()}
+    base = [n for n, _, _ in hybrid.search(bm25, graph, "퍼널", k=3)]
+    rer = [n for n, _, _ in hybrid.search(bm25, graph, "퍼널", k=3,
+                                          reranker=FakeReranker(), texts=texts)]
+    assert base != rer  # 리랭커가 순위에 실제로 개입
+
+
+def test_report_highlight(tmp_path):
+    from vault_recall import report as report_mod
+    notes, graph, _ = load()
+    out = tmp_path / "g.html"
+    report_mod.build(notes, graph, out, highlight={"퍼널 분석 기초"}, highlight_label="테스트")
+    html = out.read_text(encoding="utf-8")
+    assert "#ff3b30" in html and "소환 근거 하이라이트" in html
+
+
+def test_lint_invalid_values(tmp_path):
+    from vault_recall.parser import load_vault as lv, lint as lint_fn
+    (tmp_path / "나쁜 노트.md").write_text(
+        "---\ntype: 이상한값\nverified: maybe\npriority: ★★x\ndescription: d\n---\n본문",
+        encoding="utf-8")
+    issues = lint_fn(lv(tmp_path))
+    kinds = {(k) for _, k, *_ in issues["invalid_values"]}
+    assert {"type", "verified", "priority"} <= kinds

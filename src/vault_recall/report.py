@@ -23,7 +23,7 @@ TEMPLATE = """<!DOCTYPE html>
  .sw{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:6px}
 </style></head><body>
 <div id="graph"></div>
-<div id="info"><b>vault-recall 지식그래프</b><br>노드를 클릭하면 상세가 보입니다.</div>
+<div id="info"><b>vault-recall 지식그래프</b><br>__HLNOTE__노드를 클릭하면 상세가 보입니다.</div>
 <div id="legend">__LEGEND__</div>
 <script src="https://unpkg.com/force-graph@1"></script>
 <script>
@@ -33,7 +33,7 @@ ForceGraph()(document.getElementById('graph'))
   .graphData(data)
   .nodeId('id')
   .nodeLabel(n => n.id)
-  .nodeVal(n => 2 + n.degree)
+  .nodeVal(n => (n.hl ? 8 : 2) + n.degree)
   .nodeColor(n => n.color)
   .linkColor(() => 'rgba(0,0,0,0.12)')
   .onNodeClick(n => {
@@ -44,18 +44,26 @@ ForceGraph()(document.getElementById('graph'))
 </script></body></html>"""
 
 
-def build(notes, graph, out_path: str | Path) -> str:
+def build(notes, graph, out_path: str | Path, highlight: set | None = None,
+          highlight_label: str = "") -> str:
+    """highlight: 소환 근거 노트명 집합 — 지도에 불빛으로 비춘다 (react-force-graph 개념)."""
     folders = sorted({n.folder for n in notes.values()})
     color = {f: PALETTE[i % len(PALETTE)] for i, f in enumerate(folders)}
+    highlight = highlight or set()
     nodes = [{"id": n.name, "folder": n.folder, "type": n.type,
               "verified": str(n.verified), "degree": graph.degree(n.name),
-              "desc": n.description[:160], "color": color[n.folder]}
+              "desc": n.description[:160],
+              "color": ("#ff3b30" if n.name in highlight else color[n.folder]),
+              "hl": n.name in highlight}
              for n in notes.values()]
     links = [{"source": s, "target": t} for s, ts in graph.out.items() for t in ts]
     legend = "".join('<span class="sw" style="background:' + color[f] + '"></span>' + f + "&nbsp;&nbsp;"
                      for f in folders)
+    hlnote = (f"🔴 소환 근거 하이라이트: <i>{highlight_label}</i><br>"
+              if highlight else "")
     html = (TEMPLATE.replace("__DATA__", json.dumps({"nodes": nodes, "links": links},
                                                     ensure_ascii=False))
-                    .replace("__LEGEND__", legend))
+                    .replace("__LEGEND__", legend)
+                    .replace("__HLNOTE__", hlnote))
     Path(out_path).write_text(html, encoding="utf-8")
     return str(out_path)

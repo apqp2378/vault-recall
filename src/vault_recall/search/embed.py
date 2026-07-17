@@ -91,3 +91,35 @@ def get_provider(enabled: bool = True, model_name: str = DEFAULT_MODEL,
             print(f"[embed] 의미 검색 비활성 ({type(e).__name__}) — BM25+그래프 코어로 동작. "
                   f"활성화: pip install 'vault-recall[embed]'")
         return None
+
+
+DEFAULT_RERANKER = os.environ.get("VAULT_RECALL_RERANK_MODEL", "BAAI/bge-reranker-v2-m3")
+
+
+class CrossEncoderReranker:
+    """리랭커(cross-encoder) — 후보를 질의-문서 쌍으로 재채점 (FlagEmbedding 리랭커 반영).
+
+    인터페이스: rerank(query, candidates=[(name, text)], k) → [(name, score)]
+    """
+
+    def __init__(self, model_name: str = DEFAULT_RERANKER):
+        from sentence_transformers import CrossEncoder
+        self.model_name = model_name
+        self.model = CrossEncoder(model_name)
+
+    def rerank(self, query: str, candidates: list, k: int = 5):
+        scores = self.model.predict([(query, text[:1500]) for _, text in candidates])
+        order = sorted(range(len(candidates)), key=lambda i: -float(scores[i]))[:k]
+        return [(candidates[i][0], float(scores[i])) for i in order]
+
+
+def get_reranker(enabled: bool = False, model_name: str = DEFAULT_RERANKER,
+                 quiet: bool = False):
+    if not enabled:
+        return None
+    try:
+        return CrossEncoderReranker(model_name)
+    except Exception as e:
+        if not quiet:
+            print(f"[rerank] 리랭커 비활성 ({type(e).__name__}) — 하이브리드 순위 유지.")
+        return None

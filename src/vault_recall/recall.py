@@ -56,10 +56,11 @@ def _query_words(q: str) -> list[str]:
 
 
 def perform(notes: dict[str, Note], graph, bm25: BM25, query: str, k: int = 5,
-            verified_only: bool = False, embed_provider=None) -> RecallResult:
+            verified_only: bool = False, embed_provider=None, reranker=None) -> RecallResult:
     type_of = {n.name: n.type for n in notes.values()}
+    texts = {n.name: n.search_text() for n in notes.values()} if reranker else None
     ranked = hybrid.search(bm25, graph, query, k=k * 2, embed_provider=embed_provider,
-                           type_of=type_of)
+                           type_of=type_of, reranker=reranker, texts=texts)
     hits = []
     for name, score, why in ranked:
         note = notes.get(name)

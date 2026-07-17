@@ -45,3 +45,14 @@
 - 미설치·다운로드 차단·OOM 등 어떤 실패에도 코어(BM25+그래프)로 폴백 — 코어는 완결적.
 - 이 개발 환경은 모델 다운로드가 차단돼 융합 효과의 실측은 로컬 몫 —
   대신 갭을 측정해 동봉: 패러프레이즈 10건에서 코어 R@5 60% (eval/gold_paraphrase.json).
+
+
+## D-010 · 참고 10선 전수 반영 감사 (누락 4건 교정)
+- 감사 결과 10선 중 4건이 미반영/절반 반영이었다: docling(문서 수집)·리랭커·ts-fsrs(훈련)·근거 하이라이트.
+- 반영: ① `ingest --files` — md/txt 내장 파서 + pdf/docx는 docling optional provider(미설치 시 안내 후 스킵)
+  ② `--rerank` — cross-encoder 재채점(bge-reranker-v2-m3 기본, 우아한 폴백)
+  ③ `train` — SM-2 간격반복(결정적, 채점은 사람 grade 0~5, .recall_cache/srs_log.json). FSRS는 provider 교체 경로.
+  ④ `report --query` — 소환 근거를 지식지도에 하이라이트("근거 카드를 불빛으로").
+  ⑤ lint 값 검증(type 열거·verified 불리언·priority 형식) — instructor 개념 심화.
+- 원칙 유지: 새 기능 전부 결정적이거나(train·lint·highlight) 우아한 폴백을 가진 optional provider(docling·reranker).
+- 훈련 카드 선정 우선순위: 기한 지난 카드 → 미훈련 answer/experience 먼저 (면접 대비 가치 기준, 결정적).
