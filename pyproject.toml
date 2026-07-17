@@ -1,0 +1,20 @@
+[project]
+name = "vault-recall"
+version = "0.1.0"
+description = "Obsidian 볼트를 소환 가능한 지식 엔진으로 — 파스·그래프·하이브리드 검색·정직한 공백·진단·평가"
+requires-python = ">=3.9"
+dependencies = []
+
+[project.optional-dependencies]
+embed = ["sentence-transformers"]
+dev = ["pytest"]
+
+[project.scripts]
+vault-recall = "vault_recall.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
